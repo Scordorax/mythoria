@@ -14,14 +14,13 @@ use Symfony\Component\Routing\Attribute\Route;
 use Symfony\Component\Security\Http\Attribute\IsGranted;
 
 
-#[IsGranted('IS_AUTHENTICATED_FULLY')]
 class DeckController extends AbstractController
 {
-    #[Route('', methods: ['GET'])]
+    #[Route('/decks', methods: ['GET'])]
     public function myDecks(DeckRepository $repo): JsonResponse
     {
         $user = $this->getUser();
-        $decks = $repo->findBy(['user' => $user]);
+        $decks = $repo->findBy(['usere' => $user]);
 
         $result = [];
         foreach ($decks as $deck) {

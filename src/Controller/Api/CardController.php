@@ -10,10 +10,9 @@ use Symfony\Component\Routing\Attribute\Route;
 use Symfony\Component\Security\Http\Attribute\IsGranted;
 
 
-#[IsGranted('IS_AUTHENTICATED_FULLY')]
 class CardController extends AbstractController
 {
-    #[Route('', methods: ['GET'])]
+    #[Route('/cards', methods: ['GET'])]
     public function index(CardRepository $cardRepository): JsonResponse
     {
         $cards = $cardRepository->findAll();
@@ -37,7 +36,7 @@ class CardController extends AbstractController
         return $this->json($result);
     }
 
-    #[Route('/{id}', methods: ['GET'])]
+    #[Route('/cards/{id}', methods: ['GET'])]
     public function show(int $id, CardRepository $cardRepository): JsonResponse
     {
         $card = $cardRepository->find($id);

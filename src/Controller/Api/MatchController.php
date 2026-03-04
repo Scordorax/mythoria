@@ -12,10 +12,9 @@ use Symfony\Component\Routing\Attribute\Route;
 use Symfony\Component\Security\Http\Attribute\IsGranted;
 
 
-#[IsGranted('IS_AUTHENTICATED_FULLY')]
 class MatchController extends AbstractController
 {
-    #[Route('', methods: ['GET'])]
+    #[Route('/match', methods: ['GET'])]
     public function myMatches(GameMatchRepository $repo): JsonResponse
     {
         $user = $this->getUser();

@@ -12,14 +12,22 @@ use Symfony\Component\Routing\Attribute\Route;
 use Symfony\Component\Security\Http\Attribute\IsGranted;
 
 
-#[IsGranted('IS_AUTHENTICATED_FULLY')]
 class BoosterController extends AbstractController
 {
-    #[Route('', methods: ['GET'])]
+    #[Route('/boosters', methods: ['GET'])]
     public function list(BoosterRepository $repo): JsonResponse
     {
         $boosters = $repo->findAll();
-        return $this->json($boosters);
+
+        // Transformer chaque booster en tableau simple
+        $data = array_map(fn($b) => [
+            'id' => $b->getId(),
+            'name' => $b->getName(),
+            'price' => $b->getPrice(),
+            'created_at' => $b->getCreatedAt()->format('Y-m-d H:i:s')
+        ], $boosters);
+
+        return $this->json($data);
     }
 
     #[Route('/open/{id}', methods: ['POST'])]

@@ -9,15 +9,14 @@ use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\Routing\Attribute\Route;
 use Symfony\Component\Security\Http\Attribute\IsGranted;
 
-#[IsGranted('IS_AUTHENTICATED_FULLY')]
 class CollectionController extends AbstractController
 {
-    #[Route('', methods: ['GET'])]
+    #[Route('/collections', methods: ['GET'])]
     public function myCollection(CollectionneRepository $repo): JsonResponse
     {
         $user = $this->getUser();
 
-        $collections = $repo->findBy(['user' => $user]);
+        $collections = $repo->findBy(['usere' => $user]);
 
         $result = [];
         foreach ($collections as $c) {
