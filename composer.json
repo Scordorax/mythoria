@@ -20,7 +20,7 @@
         "symfony/mercure-bundle": "^0.4.2",
         "symfony/runtime": "6.4.*",
         "symfony/security-bundle": "6.4.*",
-        "symfony/yaml": "6.4.*"
+        "symfony/yaml": "6.4.*",
     },
     "config": {
         "allow-plugins": {

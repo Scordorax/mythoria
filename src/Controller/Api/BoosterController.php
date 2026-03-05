@@ -5,6 +5,7 @@ namespace App\Controller\Api;
 use App\Entity\Collectionne;
 use App\Entity\Booster;
 use App\Repository\BoosterRepository;
+use App\Repository\UserRepository;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -30,31 +31,33 @@ class BoosterController extends AbstractController
         return $this->json($data);
     }
 
-    #[Route('/open/{id}', methods: ['POST'])]
-    public function open(int $id, BoosterRepository $repo, EntityManagerInterface $em): JsonResponse
+    #[Route('/boosters/open/{userId}/{boosterId}', methods: ['POST'])]
+    public function open(int $userId, int $boosterId, UserRepository $userRepo, BoosterRepository $boosterRepo, EntityManagerInterface $em): JsonResponse
     {
-        $user = $this->getUser();
+        // Récupérer l'utilisateur par son ID
+        $user = $userRepo->find($userId);
+        if (!$user) {
+            return $this->json(['error' => 'User not found'], 404);
+        }
 
-        /** @var Booster|null $booster */
-        $booster = $repo->find($id);
+        // Récupérer le booster par son ID
+        $booster = $boosterRepo->find($boosterId);
         if (!$booster) {
             return $this->json(['error' => 'Booster not found'], 404);
         }
 
-        // Ajouter chaque carte du booster à la collection du joueur
+        // Ajouter chaque carte du booster à la collection de l'utilisateur
         foreach ($booster->getCards() as $card) {
             $collection = $em->getRepository(Collectionne::class)->findOneBy([
-                'user' => $user,
+                'usere' => $user,
                 'card' => $card
             ]);
 
             if ($collection) {
-                // Si la carte existe déjà, incrémenter la quantité
                 $collection->setQuantity($collection->getQuantity() + 1);
             } else {
-                // Sinon créer une nouvelle entrée
                 $collection = new Collectionne();
-                $collection->setUser($user);
+                $collection->setUsere($user);
                 $collection->setCard($card);
                 $collection->setQuantity(1);
                 $em->persist($collection);
@@ -65,6 +68,8 @@ class BoosterController extends AbstractController
 
         return $this->json([
             'message' => 'Booster opened',
+            'userId' => $user->getId(),
+            'boosterId' => $booster->getId(),
             'cardsReceived' => count($booster->getCards())
         ]);
     }
