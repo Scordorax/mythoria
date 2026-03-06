@@ -16,10 +16,16 @@ use Symfony\Component\Security\Http\Attribute\IsGranted;
 
 class DeckController extends AbstractController
 {
-    #[Route('/decks', methods: ['GET'])]
-    public function myDecks(DeckRepository $repo): JsonResponse
+    #[Route('/decks/user/{userId}', methods: ['GET'])]
+    public function decksByUser(int $userId, DeckRepository $repo, \App\Repository\UserRepository $userRepo): JsonResponse
     {
-        $user = $this->getUser();
+        // Récupérer l'utilisateur
+        $user = $userRepo->find($userId);
+        if (!$user) {
+            return $this->json(['error' => 'Utilisateur introuvable'], 404);
+        }
+
+        // Récupérer les decks de cet utilisateur
         $decks = $repo->findBy(['usere' => $user]);
 
         $result = [];
@@ -50,15 +56,27 @@ class DeckController extends AbstractController
         return $this->json($result);
     }
 
-    #[Route('/create', methods: ['POST'])]
-    public function create(Request $request, EntityManagerInterface $em, CardRepository $cardRepo): JsonResponse
+    #[Route('/decks/create', methods: ['POST'])]
+    public function create(Request $request, EntityManagerInterface $em, CardRepository $cardRepo, \App\Repository\UserRepository $userRepo): JsonResponse
     {
-        $user = $this->getUser();
         $data = json_decode($request->getContent(), true);
 
+        // ⚡ Récupérer l'utilisateur depuis userId envoyé par Angular
+        $userId = $data['userId'] ?? null;
+        if (!$userId) {
+            return $this->json(['error' => 'userId manquant'], 400);
+        }
+
+        $user = $userRepo->find($userId);
+        if (!$user) {
+            return $this->json(['error' => 'Utilisateur introuvable'], 404);
+        }
+
         $deck = new Deck();
-        $deck->setUser($user);
+        $deck->setUsere($user);  // maintenant non-null
         $deck->setName($data['name']);
+        $deck->setCreatedAt(new \DateTimeImmutable());
+
         $em->persist($deck);
 
         // Ajouter les cartes au deck
@@ -76,23 +94,124 @@ class DeckController extends AbstractController
         $em->flush();
 
         return $this->json([
-            'message' => 'Deck created',
+            'message' => 'Deck créé',
             'deckId' => $deck->getId()
         ]);
     }
 
-    #[Route('/{id}', methods: ['DELETE'])]
-    public function delete(Deck $deck, EntityManagerInterface $em): JsonResponse
+    #[Route('/decks/{userId}/{id}', methods: ['DELETE'])]
+    public function delete(
+        int $userId,
+        Deck $deck,
+        EntityManagerInterface $em
+    ): JsonResponse
     {
-        $user = $this->getUser();
 
-        if ($deck->getUser() !== $user) {
+        if ($deck->getUsere()->getId() !== $userId) {
             return $this->json(['error' => 'Unauthorized'], 403);
+        }
+
+        // Supprimer les cartes du deck
+        foreach ($deck->getDeckCards() as $deckCard) {
+            $em->remove($deckCard);
         }
 
         $em->remove($deck);
         $em->flush();
 
-        return $this->json(['message' => 'Deck deleted']);
+        return $this->json([
+            'message' => 'Deck deleted'
+        ]);
     }
+
+    #[Route('/decks/{userId}/{id}', methods: ['PUT'])]
+    public function update(
+        int                    $userId,
+        Deck                   $deck,
+        Request                $request,
+        EntityManagerInterface $em,
+        CardRepository         $cardRepo
+    ): JsonResponse
+    {
+        $user = $this->getUser();
+
+        if ($deck->getUsere()->getId() !== $userId) {
+            return $this->json(['error' => 'Unauthorized'], 403);
+        }
+
+        $data = json_decode($request->getContent(), true);
+
+        if (isset($data['name'])) {
+            $deck->setName($data['name']);
+        }
+
+        foreach ($deck->getDeckCards() as $deckCard) {
+            $em->remove($deckCard);
+        }
+
+        if (isset($data['cards']) && is_array($data['cards'])) {
+
+            foreach ($data['cards'] as $c) {
+
+                $card = $cardRepo->find($c['id']);
+
+                if ($card) {
+
+                    $deckCard = new DeckCard();
+                    $deckCard->setDeck($deck);
+                    $deckCard->setCard($card);
+                    $deckCard->setQuantity($c['quantity']);
+
+                    $em->persist($deckCard);
+                }
+            }
+        }
+
+        $em->flush();
+
+        return $this->json([
+            'message' => 'Deck updated',
+            'deckId' => $deck->getId()
+        ]);
+    }
+
+    #[Route('/decks/{userId}/{id}', methods: ['GET'])]
+    public function getDeckDetail(
+        int $userId,
+        Deck $deck
+    ): JsonResponse
+    {
+
+        // Vérifie que le deck appartient bien à l'utilisateur
+        if ($deck->getUsere()->getId() !== $userId) {
+            return $this->json(['error' => 'Unauthorized'], 403);
+        }
+
+        $cards = [];
+
+        foreach ($deck->getDeckCards() as $deckCard) {
+
+            $card = $deckCard->getCard();
+
+            $cards[] = [
+                'cardId' => $card->getId(),
+                'name' => $card->getName(),
+                'quantity' => $deckCard->getQuantity(),
+                'type' => $card->getType(),
+                'rarity' => $card->getRarity(),
+                'attack' => $card->getAttack(),
+                'defense' => $card->getDefense(),
+                'hp' => $card->getHp(),
+                'energyCost' => $card->getEnergyCost()
+            ];
+        }
+
+        return $this->json([
+            'deckId' => $deck->getId(),
+            'name' => $deck->getName(),
+            'cards' => $cards
+        ]);
+    }
+
+
 }
