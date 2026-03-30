@@ -57,16 +57,69 @@ class MatchPlayer
     #[ORM\Column(type: 'json', nullable: true)]
     private array $discard = [];
 
-    public function getDeckState(): array
+    #[ORM\Column(type: 'json', nullable: true)]
+    private array $deadCards = [];
+
+    // =========================
+    // 🏗 CONSTRUCTEUR
+    // =========================
+    public function __construct()
     {
-        return $this->deckState;
+        $this->matchTurns = new ArrayCollection();
+        $this->matchActions = new ArrayCollection();
+
+        $this->deadCards = []; // ✅ IMPORTANT
+        $this->hand = [];
+        $this->deckState = [];
+        $this->discard = [];
+        $this->activeCard = null;
     }
 
-    public function setDeckState(array $deckState): void
+    // =========================
+    // 🔥 DEAD CARDS
+    // =========================
+    public function getDeadCards(): array
     {
-        $this->deckState = $deckState;
+        return $this->deadCards ?? [];
     }
 
+    public function setDeadCards(array $deadCards): static
+    {
+        $this->deadCards = $deadCards;
+        return $this;
+    }
+
+    // =========================
+    // ❤️ LIFE POINTS
+    // =========================
+    public function getLifePoints(): ?int
+    {
+        return $this->lifePoints;
+    }
+
+    public function setLifePoints(int $lifePoints): static
+    {
+        $this->lifePoints = $lifePoints;
+        return $this;
+    }
+
+    // =========================
+    // ⚡ ENERGY
+    // =========================
+    public function getEnergy(): ?int
+    {
+        return $this->energy;
+    }
+
+    public function setEnergy(int $energy): static
+    {
+        $this->energy = $energy;
+        return $this;
+    }
+
+    // =========================
+    // 🃏 HAND
+    // =========================
     public function getHand(): array
     {
         return $this->hand;
@@ -77,6 +130,9 @@ class MatchPlayer
         $this->hand = $hand;
     }
 
+    // =========================
+    // 🎴 ACTIVE CARD
+    // =========================
     public function getActiveCard(): ?array
     {
         return $this->activeCard;
@@ -87,6 +143,9 @@ class MatchPlayer
         $this->activeCard = $activeCard;
     }
 
+    // =========================
+    // 🗑 DISCARD
+    // =========================
     public function getDiscard(): array
     {
         return $this->discard;
@@ -97,41 +156,22 @@ class MatchPlayer
         $this->discard = $discard;
     }
 
-    public function __construct()
+    // =========================
+    // 📦 DECK STATE
+    // =========================
+    public function getDeckState(): array
     {
-        $this->matchTurns = new ArrayCollection();
-        $this->matchActions = new ArrayCollection();
+        return $this->deckState;
     }
 
-    public function getId(): ?int
+    public function setDeckState(array $deckState): void
     {
-        return $this->id;
+        $this->deckState = $deckState;
     }
 
-    public function getLifePoints(): ?int
-    {
-        return $this->lifePoints;
-    }
-
-    public function setLifePoints(int $lifePoints): static
-    {
-        $this->lifePoints = $lifePoints;
-
-        return $this;
-    }
-
-    public function getEnergy(): ?int
-    {
-        return $this->energy;
-    }
-
-    public function setEnergy(int $energy): static
-    {
-        $this->energy = $energy;
-
-        return $this;
-    }
-
+    // =========================
+    // RELATIONS
+    // =========================
     public function getMatch(): ?GameMatch
     {
         return $this->match;
@@ -140,7 +180,6 @@ class MatchPlayer
     public function setMatch(?GameMatch $match): static
     {
         $this->match = $match;
-
         return $this;
     }
 
@@ -152,7 +191,6 @@ class MatchPlayer
     public function setUsere(?User $usere): static
     {
         $this->usere = $usere;
-
         return $this;
     }
 
@@ -164,67 +202,34 @@ class MatchPlayer
     public function setDeck(?Deck $deck): static
     {
         $this->deck = $deck;
-
         return $this;
     }
 
-    /**
-     * @return Collection<int, MatchTurn>
-     */
+    public function getId(): ?int
+    {
+        return $this->id;
+    }
+
+    // =========================
+    // COLLECTIONS
+    // =========================
     public function getMatchTurns(): Collection
     {
         return $this->matchTurns;
     }
 
-    public function addMatchTurn(MatchTurn $matchTurn): static
+    public function setMatchTurns(Collection $matchTurns): void
     {
-        if (!$this->matchTurns->contains($matchTurn)) {
-            $this->matchTurns->add($matchTurn);
-            $matchTurn->setPlayer($this);
-        }
-
-        return $this;
+        $this->matchTurns = $matchTurns;
     }
 
-    public function removeMatchTurn(MatchTurn $matchTurn): static
-    {
-        if ($this->matchTurns->removeElement($matchTurn)) {
-            // set the owning side to null (unless already changed)
-            if ($matchTurn->getPlayer() === $this) {
-                $matchTurn->setPlayer(null);
-            }
-        }
-
-        return $this;
-    }
-
-    /**
-     * @return Collection<int, MatchAction>
-     */
     public function getMatchActions(): Collection
     {
         return $this->matchActions;
     }
 
-    public function addMatchAction(MatchAction $matchAction): static
+    public function setMatchActions(Collection $matchActions): void
     {
-        if (!$this->matchActions->contains($matchAction)) {
-            $this->matchActions->add($matchAction);
-            $matchAction->setPlayer($this);
-        }
-
-        return $this;
-    }
-
-    public function removeMatchAction(MatchAction $matchAction): static
-    {
-        if ($this->matchActions->removeElement($matchAction)) {
-            // set the owning side to null (unless already changed)
-            if ($matchAction->getPlayer() === $this) {
-                $matchAction->setPlayer(null);
-            }
-        }
-
-        return $this;
+        $this->matchActions = $matchActions;
     }
 }

@@ -4,7 +4,6 @@ namespace App\Controller\Api;
 
 use App\Entity\GameMatch;
 use App\Entity\MatchPlayer;
-use App\Entity\MatchAction;
 use App\Repository\DeckRepository;
 use App\Repository\GameMatchRepository;
 use App\Repository\UserRepository;
@@ -18,75 +17,27 @@ use Symfony\Component\Routing\Attribute\Route;
 #[Route('/match')]
 class MatchController extends AbstractController
 {
-    private GameEngine $gameEngine;
-
-    public function __construct(GameEngine $gameEngine)
+    public function __construct(private GameEngine $gameEngine)
     {
-        $this->gameEngine = $gameEngine;
     }
 
-    /**
-     * 📋 Liste des matchs
-     */
-    #[Route('/user/{userId}', methods: ['GET'])]
-    public function myMatches(int $userId, GameMatchRepository $repo, UserRepository $userRepo): JsonResponse
-    {
-        $user = $userRepo->find($userId);
-
-        if (!$user) {
-            return $this->json(['error' => 'User not found'], 404);
-        }
-
-        $matches = $repo->findByUser($user);
-
-        $result = [];
-
-        foreach ($matches as $match) {
-            $players = [];
-
-            foreach ($match->getMatchPlayers() as $p) {
-                $players[] = [
-                    'username' => $p->getUsere()?->getUsername() ?? 'AI',
-                    'lifePoints' => $p->getLifePoints(),
-                    'energy' => $p->getEnergy(),
-                ];
-            }
-
-            $result[] = [
-                'matchId' => $match->getId(),
-                'status' => $match->getStatus(),
-                'turn' => $match->getCurrentTurn(),
-                'players' => $players
-            ];
-        }
-
-        return $this->json($result);
-    }
-
-    /**
-     * 🎮 Créer un match
-     */
+    // =========================
+    // 🎮 CREATE MATCH
+    // =========================
     #[Route('/create/{userId}/{deckId}', methods: ['POST'])]
     public function createMatch(
         int $userId,
         int $deckId,
-        Request $request,
         EntityManagerInterface $em,
         UserRepository $userRepo,
         DeckRepository $deckRepo
-    ): JsonResponse {
-
+    ): JsonResponse
+    {
         $user = $userRepo->find($userId);
-        if (!$user) {
-            return $this->json([
-                'error' => 'User not found in DB',
-                'userId' => $userId
-            ], 404);
-        }
-
         $deck = $deckRepo->find($deckId);
-        if (!$deck) {
-            return $this->json(['error' => 'Deck not found'], 404);
+
+        if (!$user || !$deck) {
+            return $this->json(['error' => 'User or deck not found'], 404);
         }
 
         $match = new GameMatch();
@@ -94,165 +45,125 @@ class MatchController extends AbstractController
         $match->setStartedAt(new \DateTimeImmutable());
         $match->setCurrentTurn(1);
 
-        // 👤 PLAYER
+        // 👤 Joueur
         $player = new MatchPlayer();
         $player->setUsere($user);
         $player->setDeck($deck);
         $player->setLifePoints(100);
-        $player->setEnergy(0);
+        $player->setEnergy(1000);
         $player->setMatch($match);
 
         // 🤖 IA
-        $aiUser = $userRepo->find(7);
-        $aiDeck = $deckRepo->find(11);
-
-        if (!$aiUser || !$aiDeck) {
-            return $this->json([
-                'error' => 'AI user or deck not found',
-                'aiUser' => $aiUser ? $aiUser->getId() : null,
-                'aiDeck' => $aiDeck ? $aiDeck->getId() : null
-            ], 500);
-        }
-
         $ai = new MatchPlayer();
-        $ai->setUsere($aiUser);
-        $ai->setDeck($aiDeck);
+        $ai->setUsere($userRepo->find(7));
+        $ai->setDeck($deckRepo->find(11));
         $ai->setLifePoints(100);
-        $ai->setEnergy(0);
+        $ai->setEnergy(1000);
         $ai->setMatch($match);
 
-        // 🎴 Deck joueur
-        $deckCards = [];
-
-        foreach ($player->getDeck()?->getDeckCards() ?? [] as $dc) {
-            $card = $dc->getCard();
-
-            $deckCards[] = [
-                'id' => $card->getId(),
-                'name' => $card->getName(),
-                'description' => $card->getDescription(),
-                'type' => $card->getType(),
-                'rarity' => $card->getRarity(),
-                'attack' => $card->getAttack(),
-                'defense' => $card->getDefense(),
-                'hp' => $card->getHp(),
-                'energyCost' => $card->getEnergyCost()
-            ];
-        }
-
-        // 🎴 Init
-        $this->gameEngine->initGame($player, $deckCards);
-        $this->gameEngine->initGame($ai, $deckCards);
+        // 🎴 INIT
+        $this->gameEngine->initGame($player, $this->extractCards($player));
+        $this->gameEngine->initGame($ai, $this->extractCards($ai));
 
         $em->persist($match);
         $em->persist($player);
         $em->persist($ai);
+        $em->flush();
+
+        return $this->json([
+            'matchId' => $match->getId()
+        ]);
+    }
+
+    // =========================
+    // 🃏 DRAW CARD
+    // =========================
+    #[Route('/{id}/draw-card', methods: ['POST'])]
+    public function drawCard(
+        Request $request,
+        GameMatch $match,
+        EntityManagerInterface $em
+    ): JsonResponse
+    {
+        $data = json_decode($request->getContent(), true);
+        $userId = $data['userId'] ?? null;
+
+        if (!$userId) {
+            return $this->json(['error' => 'userId required'], 400);
+        }
+
+        $player = $em->getRepository(MatchPlayer::class)->findOneBy([
+            'match' => $match,
+            'usere' => $userId
+        ]);
+
+        if (!$player) {
+            return $this->json(['error' => 'Player not found'], 400);
+        }
+
+        $card = $this->gameEngine->drawCard($player);
+
+        if (!$card) {
+            return $this->json(['error' => 'Deck empty'], 400);
+        }
 
         $em->flush();
 
         return $this->json([
-            'matchId' => $match->getId(),
-            'message' => 'Match initialisé'
+            'card' => $card
         ]);
     }
 
-    /**
-     * 🔍 Voir un match
-     */
-    #[Route('/{id}', methods: ['GET'])]
-    public function show(GameMatch $match): JsonResponse
-    {
-        $players = [];
-
-        foreach ($match->getMatchPlayers() as $p) {
-            $players[] = [
-                'username' => $p->getUsere()?->getUsername() ?? 'AI',
-                'lifePoints' => $p->getLifePoints(),
-                'energy' => $p->getEnergy(),
-                'hand' => $p->getHand(),
-                'activeCard' => $p->getActiveCard(),
-                'deckCount' => count($p->getDeckState()),
-                'discard' => $p->getDiscard()
-            ];
-        }
-
-        return $this->json([
-            'matchId' => $match->getId(),
-            'turn' => $match->getCurrentTurn(),
-            'status' => $match->getStatus(),
-            'players' => $players
-        ]);
-    }
-
-    /**
-     * 🃏 Jouer une carte
-     */
+    // =========================
+    // 🎴 PLAY CARD
+    // =========================
     #[Route('/{id}/play-card', methods: ['POST'])]
     public function playCard(
         Request $request,
         GameMatch $match,
         EntityManagerInterface $em
-    ): JsonResponse {
-
-        $user = $this->getUser();
-
-        $player = null;
-        $ai = null;
-
-        foreach ($match->getMatchPlayers() as $p) {
-            if ($p->getUsere() === $user) {
-                $player = $p;
-            } else {
-                $ai = $p;
-            }
-        }
-
-        if (!$player || !$ai) {
-            return $this->json(['error' => 'Invalid match'], 400);
-        }
-
+    ): JsonResponse
+    {
         $data = json_decode($request->getContent(), true);
+
+        $userId = $data['userId'] ?? null;
         $cardId = $data['cardId'] ?? null;
 
-        $this->gameEngine->playerTurn($player);
-
-        $card = $this->gameEngine->playCard($player, $cardId);
-
-        if (!$card) {
-            return $this->json(['error' => 'Not enough energy'], 400);
+        if (!$userId) {
+            return $this->json(['error' => 'userId required'], 400);
         }
 
-        $result = $this->gameEngine->attack($player, $ai, $card);
-
-        // LOG
-        $action = new MatchAction();
-        $action->setActionType('PLAYER_ATTACK');
-        $action->setPayload([
-            'card' => $card['name'],
-            'damage' => $result['damage'],
-            'ko' => $result['ko']
+        // ⚠️ correction ici
+        $user = $em->getRepository(MatchPlayer::class)->findOneBy([
+            'match' => $match,
+            'usere' => $userId
         ]);
-        $action->setCreatedAt(new \DateTimeImmutable());
-        $action->setPlayer($player);
-        $action->setMatch($match);
 
-        $em->persist($action);
+        if (!$user) {
+            return $this->json(['error' => 'Player not found'], 400);
+        }
 
-        // IA
-        $aiResult = $this->gameEngine->aiTurn($ai, $player);
+        $ai = $this->getOpponent($match, $user);
 
-        $aiAction = new MatchAction();
-        $aiAction->setActionType('AI_TURN');
-        $aiAction->setPayload($aiResult);
-        $aiAction->setCreatedAt(new \DateTimeImmutable());
-        $aiAction->setPlayer($ai);
-        $aiAction->setMatch($match);
+        if (!$ai) {
+            return $this->json(['error' => 'Opponent not found'], 400);
+        }
 
-        $em->persist($aiAction);
+        $card = $this->gameEngine->playCard($user, $cardId);
+
+        if (!$card) {
+            return $this->json(['error' => 'Not enough energy or card not found'], 400);
+        }
+
+        // 🔥 attaque
+        $result = $this->gameEngine->attack($user, $ai, $card);
+
+        // 🤖 IA
+        $aiResult = $this->gameEngine->aiTurn($ai, $user);
 
         $match->setCurrentTurn($match->getCurrentTurn() + 1);
 
-        if ($player->getLifePoints() <= 0 || $ai->getLifePoints() <= 0) {
+        if ($user->getLifePoints() <= 0 || $ai->getLifePoints() <= 0) {
             $match->setStatus('finished');
             $match->setEndedAt(new \DateTimeImmutable());
         }
@@ -260,43 +171,103 @@ class MatchController extends AbstractController
         $em->flush();
 
         return $this->json([
-            'message' => 'Tour joué',
             'playerResult' => $result,
             'aiResult' => $aiResult
         ]);
     }
 
-    /**
-     * 📊 Historique
-     */
-    #[Route('/{id}/actions', methods: ['GET'])]
-    public function actions(GameMatch $match): JsonResponse
+    // =========================
+    // 📊 GET MATCH
+    // =========================
+    #[Route('/{id}', methods: ['GET'])]
+    public function show(int $id, GameMatchRepository $repo): JsonResponse
     {
-        $actions = [];
+        $match = $repo->find($id);
 
-        foreach ($match->getMatchActions() as $action) {
-            $actions[] = [
-                'type' => $action->getActionType(),
-                'player' => $action->getPlayer()->getUsere()?->getUsername() ?? 'AI',
-                'payload' => $action->getPayload(),
-                'date' => $action->getCreatedAt()->format('H:i:s')
+        if (!$match) {
+            return $this->json(['error' => 'Match not found'], 404);
+        }
+
+        $players = [];
+
+        foreach ($match->getMatchPlayers() as $p) {
+            $players[] = [
+                'userId' => $p->getUsere()->getId(),
+                'username' => $p->getUsere()?->getUsername(),
+                'lifePoints' => $p->getLifePoints(),
+                'energy' => $p->getEnergy(),
+
+                'hand' => $this->formatCards($p->getHand()),
+
+                // ⚠️ IMPORTANT : toujours tableau
+                'activeCards' => $this->formatCards($p->getActiveCard() ?? []),
+
+                'deadCards' => $this->formatCards($p->getDeadCards() ?? []),
+
+                'deckCount' => count($p->getDeckState()),
+                'discard' => $this->formatCards($p->getDiscard())
             ];
         }
 
-        return $this->json($actions);
+        return $this->json([
+            'matchId' => $match->getId(),
+            'status' => $match->getStatus(),
+            'turn' => $match->getCurrentTurn(),
+            'players' => $players
+        ]);
     }
 
-    /**
-     * 🏁 Finir match
-     */
-    #[Route('/{id}/end', methods: ['POST'])]
-    public function end(GameMatch $match, EntityManagerInterface $em): JsonResponse
+    // =========================
+    // 🤖 OPPONENT
+    // =========================
+    private function getOpponent(GameMatch $match, MatchPlayer $player): ?MatchPlayer
     {
-        $match->setStatus('finished');
-        $match->setEndedAt(new \DateTimeImmutable());
+        foreach ($match->getMatchPlayers() as $p) {
+            if ($p->getId() !== $player->getId()) {
+                return $p;
+            }
+        }
 
-        $em->flush();
+        return null;
+    }
 
-        return $this->json(['message' => 'Match terminé']);
+    // =========================
+    // 🎴 FORMAT
+    // =========================
+    private function formatCards(array $cards): array
+    {
+        return array_map(function ($card) {
+            return [
+                'id' => $card['id'] ?? null,
+                'name' => $card['name'] ?? null,
+                'attack' => $card['attack'] ?? null,
+                'defense' => $card['defense'] ?? null,
+                'hp' => $card['hp'] ?? null,
+                'energyCost' => $card['energyCost'] ?? null
+            ];
+        }, $cards);
+    }
+
+    // =========================
+    // 🎴 INIT DECK
+    // =========================
+    private function extractCards(MatchPlayer $player): array
+    {
+        $cards = [];
+
+        foreach ($player->getDeck()->getDeckCards() as $dc) {
+            $card = $dc->getCard();
+
+            $cards[] = [
+                'id' => $card->getId(),
+                'name' => $card->getName(),
+                'attack' => $card->getAttack(),
+                'defense' => $card->getDefense(),
+                'hp' => $card->getHp(),
+                'energyCost' => $card->getEnergyCost()
+            ];
+        }
+
+        return $cards;
     }
 }

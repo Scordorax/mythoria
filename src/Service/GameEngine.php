@@ -3,43 +3,28 @@
 namespace App\Service;
 
 use App\Entity\MatchPlayer;
-use App\Entity\MatchAction;
-use App\Entity\Card;
 
 class GameEngine
 {
-    /**
-     * 🎴 Initialisation du match
-     */
-    public function initGame(MatchPlayer $player, array $deckCards): void
+    public function initGame(MatchPlayer $player, array $deck): void
     {
-        shuffle($deckCards);
+        shuffle($deck);
 
-        $player->setDeckState($deckCards);
+        $player->setDeckState($deck);
         $player->setHand([]);
-        $player->setDiscard([]);
         $player->setEnergy(0);
+        $player->setDeadCards([]);
 
-        // Pioche 5 cartes
         for ($i = 0; $i < 5; $i++) {
             $this->drawCard($player);
         }
-
-        // Carte active
-        $card = $this->drawCard($player);
-        $player->setActiveCard($card);
     }
 
-    /**
-     * 🎴 Piocher une carte
-     */
     public function drawCard(MatchPlayer $player): ?array
     {
         $deck = $player->getDeckState();
 
-        if (count($deck) === 0) {
-            return null;
-        }
+        if (empty($deck)) return null;
 
         $card = array_shift($deck);
 
@@ -52,22 +37,14 @@ class GameEngine
         return $card;
     }
 
-    /**
-     * ⚡ Ajouter énergie par tour
-     */
     public function addEnergy(MatchPlayer $player): void
     {
         $player->setEnergy($player->getEnergy() + 1);
     }
 
-    /**
-     * 🃏 Jouer une carte depuis la main
-     */
     public function playCard(MatchPlayer $player, int $cardId): ?array
     {
-        $hand = $player->getHand();
-
-        foreach ($hand as $key => $card) {
+        foreach ($player->getHand() as $key => $card) {
             if ($card['id'] === $cardId) {
 
                 if ($player->getEnergy() < $card['energyCost']) {
@@ -76,7 +53,9 @@ class GameEngine
 
                 $player->setEnergy($player->getEnergy() - $card['energyCost']);
 
+                $hand = $player->getHand();
                 unset($hand[$key]);
+
                 $player->setHand(array_values($hand));
 
                 return $card;
@@ -86,28 +65,35 @@ class GameEngine
         return null;
     }
 
-    /**
-     * ⚔️ Attaque
-     */
     public function attack(MatchPlayer $attacker, MatchPlayer $defender, array $card): array
     {
-        $damage = max(0, $card['attack'] - ($defender->getActiveCard()['defense'] ?? 0));
+        $defCard = $defender->getActiveCard();
 
-        $defenderCard = $defender->getActiveCard();
-        $defenderCard['hp'] -= $damage;
+        if (!$defCard) {
+            return ['damage' => 0, 'ko' => false];
+        }
+
+        // 🔥 Calcul des dégâts
+        $damage = max(0, $card['attack'] - $defCard['defense']);
+
+        $defCard['hp'] -= $damage;
 
         $ko = false;
 
-        if ($defenderCard['hp'] <= 0) {
+        if ($defCard['hp'] <= 0) {
             $ko = true;
 
-            $discard = $defender->getDiscard();
-            $discard[] = $defenderCard;
+            // ✅ Ajout dans cartes mortes
+            $deadCards = $defender->getDeadCards();
+            $deadCards[] = $defCard;
+            $defender->setDeadCards($deadCards);
 
-            $defender->setDiscard($discard);
+            // ❌ suppression de la carte active
             $defender->setActiveCard(null);
+
         } else {
-            $defender->setActiveCard($defenderCard);
+            // 🔄 mise à jour de la carte
+            $defender->setActiveCard($defCard);
         }
 
         return [
@@ -116,39 +102,32 @@ class GameEngine
         ];
     }
 
-    /**
-     * 🔄 Tour complet joueur
-     */
-    public function playerTurn(MatchPlayer $player): void
-    {
-        $this->drawCard($player);
-        $this->addEnergy($player);
-    }
-
-    /**
-     * 🤖 IA intelligente
-     */
     public function aiTurn(MatchPlayer $ai, MatchPlayer $enemy): array
     {
+        // 🎯 pioche + énergie
         $this->drawCard($ai);
         $this->addEnergy($ai);
 
-        $hand = $ai->getHand();
+        $best = null;
 
-        // Choisir meilleure carte jouable
-        $bestCard = null;
+        // 🤖 choix de la meilleure carte jouable
+        foreach ($ai->getHand() as $card) {
 
-        foreach ($hand as $card) {
-            if ($ai->getEnergy() >= $card['energyCost']) {
-                if (!$bestCard || $card['attack'] > $bestCard['attack']) {
-                    $bestCard = $card;
-                }
+            if ($ai->getEnergy() < $card['energyCost']) {
+                continue;
+            }
+
+            if (!$best || $card['attack'] > $best['attack']) {
+                $best = $card;
             }
         }
 
-        if ($bestCard) {
-            $this->playCard($ai, $bestCard['id']);
-            return $this->attack($ai, $enemy, $bestCard);
+        // 🎴 si une carte est jouable
+        if ($best) {
+
+            $this->playCard($ai, $best['id']);
+
+            return $this->attack($ai, $enemy, $best);
         }
 
         return ['skip' => true];
