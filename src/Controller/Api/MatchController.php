@@ -63,6 +63,7 @@ class MatchController extends AbstractController
         $player->setUsere($user);
         $player->setDeck($deck);
         $player->setLifePoints(100);
+        $player->setEnergy(0);
         $player->setMatch($match);
 
         // 🤖 IA
@@ -70,6 +71,7 @@ class MatchController extends AbstractController
         $ai->setUsere($aiUser);
         $ai->setDeck($aiDeck);
         $ai->setLifePoints(100);
+        $ai->setEnergy(0);
         $ai->setMatch($match);
 
         // 🎴 INIT
@@ -188,7 +190,17 @@ class MatchController extends AbstractController
 
         $match->setCurrentTurn($match->getCurrentTurn() + 1);
 
-        if ($user->getLifePoints() <= 0 || $ai->getLifePoints() <= 0) {
+        // Force Doctrine to detect changes on JSON columns
+        $meta = $em->getClassMetadata(MatchPlayer::class);
+        $uow  = $em->getUnitOfWork();
+        $uow->recomputeSingleEntityChangeSet($meta, $user);
+        $uow->recomputeSingleEntityChangeSet($meta, $ai);
+
+        // Lose if: all cards in cimetière OR life points gone
+        $playerAllDead = empty($user->getHand()) && empty($user->getDeckState()) && $user->getActiveCard() === null;
+        $aiAllDead     = empty($ai->getHand())   && empty($ai->getDeckState())   && $ai->getActiveCard()   === null;
+
+        if ($playerAllDead || $aiAllDead || $user->getLifePoints() <= 0 || $ai->getLifePoints() <= 0) {
             $match->setStatus('finished');
             $match->setEndedAt(new \DateTimeImmutable());
         }
