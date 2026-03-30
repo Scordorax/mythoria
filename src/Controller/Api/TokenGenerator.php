@@ -30,7 +30,7 @@ class TokenGenerator
     }
 
     /**
-     * Vérifie si le token est valide (signature)
+     * Vérifie si le token est valide (signature + expiration)
      */
     public static function isValid(string $token): bool
     {
@@ -40,7 +40,17 @@ class TokenGenerator
         [$payloadBase64, $signature] = $parts;
         $expectedSignature = hash_hmac('sha256', $payloadBase64, self::SECRET_KEY);
 
-        return hash_equals($expectedSignature, $signature);
+        if (!hash_equals($expectedSignature, $signature)) {
+            return false;
+        }
+
+        // Vérification de l'expiration
+        $payload = json_decode(self::base64UrlDecode($payloadBase64), true);
+        if (!$payload || !isset($payload['exp'])) {
+            return false;
+        }
+
+        return $payload['exp'] > time();
     }
 
     /**

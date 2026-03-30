@@ -40,6 +40,19 @@ class MatchController extends AbstractController
             return $this->json(['error' => 'User or deck not found'], 404);
         }
 
+        // Vérification que le deck appartient bien au joueur
+        if ($deck->getUsere()->getId() !== $userId) {
+            return $this->json(['error' => 'Ce deck ne vous appartient pas'], 403);
+        }
+
+        // Vérification que l'IA est configurée
+        $aiUser = $userRepo->find(7);
+        $aiDeck = $deckRepo->find(11);
+
+        if (!$aiUser || !$aiDeck) {
+            return $this->json(['error' => 'IA non configurée (userId=7 ou deckId=11 introuvable)'], 500);
+        }
+
         $match = new GameMatch();
         $match->setStatus('in_progress');
         $match->setStartedAt(new \DateTimeImmutable());
@@ -50,15 +63,13 @@ class MatchController extends AbstractController
         $player->setUsere($user);
         $player->setDeck($deck);
         $player->setLifePoints(100);
-        $player->setEnergy(1000);
         $player->setMatch($match);
 
         // 🤖 IA
         $ai = new MatchPlayer();
-        $ai->setUsere($userRepo->find(7));
-        $ai->setDeck($deckRepo->find(11));
+        $ai->setUsere($aiUser);
+        $ai->setDeck($aiDeck);
         $ai->setLifePoints(100);
-        $ai->setEnergy(1000);
         $ai->setMatch($match);
 
         // 🎴 INIT
@@ -85,6 +96,10 @@ class MatchController extends AbstractController
         EntityManagerInterface $em
     ): JsonResponse
     {
+        if ($match->getStatus() !== 'in_progress') {
+            return $this->json(['error' => 'Match terminé'], 400);
+        }
+
         $data = json_decode($request->getContent(), true);
         $userId = $data['userId'] ?? null;
 
@@ -101,16 +116,19 @@ class MatchController extends AbstractController
             return $this->json(['error' => 'Player not found'], 400);
         }
 
+        // Pioche + gain d'énergie au début du tour
         $card = $this->gameEngine->drawCard($player);
+        $this->gameEngine->addEnergy($player);
 
         if (!$card) {
-            return $this->json(['error' => 'Deck empty'], 400);
+            return $this->json(['error' => 'Deck vide'], 400);
         }
 
         $em->flush();
 
         return $this->json([
-            'card' => $card
+            'card' => $card,
+            'energy' => $player->getEnergy()
         ]);
     }
 
@@ -124,6 +142,10 @@ class MatchController extends AbstractController
         EntityManagerInterface $em
     ): JsonResponse
     {
+        if ($match->getStatus() !== 'in_progress') {
+            return $this->json(['error' => 'Match terminé'], 400);
+        }
+
         $data = json_decode($request->getContent(), true);
 
         $userId = $data['userId'] ?? null;
@@ -199,8 +221,8 @@ class MatchController extends AbstractController
 
                 'hand' => $this->formatCards($p->getHand()),
 
-                // ⚠️ IMPORTANT : toujours tableau
-                'activeCards' => $this->formatCards($p->getActiveCard() ?? []),
+                // ⚠️ IMPORTANT : activeCard est une carte unique, on l'enveloppe en tableau
+                'activeCards' => $p->getActiveCard() !== null ? $this->formatCards([$p->getActiveCard()]) : [],
 
                 'deadCards' => $this->formatCards($p->getDeadCards() ?? []),
 

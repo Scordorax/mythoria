@@ -16,7 +16,7 @@ class MatchAction
     #[ORM\Column(length: 50)]
     private ?string $actionType = null;
 
-    #[ORM\Column]
+    #[ORM\Column(type: 'json')]
     private array $payload = [];
 
     #[ORM\Column]

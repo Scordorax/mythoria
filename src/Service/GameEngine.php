@@ -55,8 +55,18 @@ class GameEngine
 
                 $hand = $player->getHand();
                 unset($hand[$key]);
-
                 $player->setHand(array_values($hand));
+
+                // L'ancienne carte active va à la défausse
+                $ancienneActive = $player->getActiveCard();
+                if ($ancienneActive) {
+                    $defausse = $player->getDiscard();
+                    $defausse[] = $ancienneActive;
+                    $player->setDiscard($defausse);
+                }
+
+                // La nouvelle carte devient la carte active
+                $player->setActiveCard($card);
 
                 return $card;
             }
@@ -69,8 +79,11 @@ class GameEngine
     {
         $defCard = $defender->getActiveCard();
 
+        // Pas de carte active → dégâts directs aux points de vie
         if (!$defCard) {
-            return ['damage' => 0, 'ko' => false];
+            $damage = $card['attack'];
+            $defender->setLifePoints($defender->getLifePoints() - $damage);
+            return ['damage' => $damage, 'ko' => false];
         }
 
         // 🔥 Calcul des dégâts

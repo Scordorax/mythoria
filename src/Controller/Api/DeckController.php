@@ -133,8 +133,6 @@ class DeckController extends AbstractController
         CardRepository         $cardRepo
     ): JsonResponse
     {
-        $user = $this->getUser();
-
         if ($deck->getUsere()->getId() !== $userId) {
             return $this->json(['error' => 'Unauthorized'], 403);
         }
