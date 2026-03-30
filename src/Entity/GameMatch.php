@@ -45,6 +45,20 @@ class GameMatch
     #[ORM\OneToMany(targetEntity: MatchAction::class, mappedBy: 'match')]
     private Collection $matchActions;
 
+    #[ORM\Column(length: 20, nullable: true)]
+    private ?string $aiDifficulty = null;
+
+    public function getAiDifficulty(): ?string
+    {
+        return $this->aiDifficulty;
+    }
+
+    public function setAiDifficulty(?string $aiDifficulty): static
+    {
+        $this->aiDifficulty = $aiDifficulty;
+        return $this;
+    }
+
     public function __construct()
     {
         $this->matchPlayers = new ArrayCollection();

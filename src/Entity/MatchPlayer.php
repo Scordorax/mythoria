@@ -45,6 +45,58 @@ class MatchPlayer
     #[ORM\OneToMany(targetEntity: MatchAction::class, mappedBy: 'player')]
     private Collection $matchActions;
 
+    #[ORM\Column(type: 'json', nullable: true)]
+    private array $deckState = [];
+
+    #[ORM\Column(type: 'json', nullable: true)]
+    private array $hand = [];
+
+    #[ORM\Column(type: 'json', nullable: true)]
+    private ?array $activeCard = null;
+
+    #[ORM\Column(type: 'json', nullable: true)]
+    private array $discard = [];
+
+    public function getDeckState(): array
+    {
+        return $this->deckState;
+    }
+
+    public function setDeckState(array $deckState): void
+    {
+        $this->deckState = $deckState;
+    }
+
+    public function getHand(): array
+    {
+        return $this->hand;
+    }
+
+    public function setHand(array $hand): void
+    {
+        $this->hand = $hand;
+    }
+
+    public function getActiveCard(): ?array
+    {
+        return $this->activeCard;
+    }
+
+    public function setActiveCard(?array $activeCard): void
+    {
+        $this->activeCard = $activeCard;
+    }
+
+    public function getDiscard(): array
+    {
+        return $this->discard;
+    }
+
+    public function setDiscard(array $discard): void
+    {
+        $this->discard = $discard;
+    }
+
     public function __construct()
     {
         $this->matchTurns = new ArrayCollection();
