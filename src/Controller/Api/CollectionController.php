@@ -4,20 +4,23 @@ namespace App\Controller\Api;
 
 use App\Entity\Collectionne;
 use App\Repository\CollectionneRepository;
+use App\Repository\UserRepository;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\Routing\Attribute\Route;
 use Symfony\Component\Security\Http\Attribute\IsGranted;
 
-#[IsGranted('IS_AUTHENTICATED_FULLY')]
 class CollectionController extends AbstractController
 {
-    #[Route('', methods: ['GET'])]
-    public function myCollection(CollectionneRepository $repo): JsonResponse
+    #[Route('/collections/{userId}', methods: ['GET'])]
+    public function myCollection(string $userId,CollectionneRepository $repo, UserRepository $userRepo): JsonResponse
     {
-        $user = $this->getUser();
+        $user = $userRepo->find($userId);
+        if (!$user) {
+            return $this->json(['error' => 'User not found'], 404);
+        }
 
-        $collections = $repo->findBy(['user' => $user]);
+        $collections = $repo->findBy(['usere' => $user]);
 
         $result = [];
         foreach ($collections as $c) {
