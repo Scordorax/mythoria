@@ -10,26 +10,10 @@ security:
         property: email
 
   firewalls:
-    # Route publique pour l'inscription
-    register:
-      pattern: ^/api/auth/register
-      stateless: true
-      security: false
-
-    # Route publique pour le login (login géré par le controller)
-    login:
-      pattern: ^/api/auth/login
-      stateless: true
-      provider: app_user_provider
-
-    # Toutes les autres routes API protégées par JWT
+    # Toutes les routes API gèrent leur propre authentification via TokenGenerator
     api:
       pattern: ^/api
       stateless: true
-      provider: app_user_provider
-      jwt: ~
+      security: false
 
-  access_control:
-    - { path: ^/api/auth/register, roles: IS_AUTHENTICATED_ANONYMOUSLY }
-    - { path: ^/api/auth/login, roles: IS_AUTHENTICATED_ANONYMOUSLY }
-    - { path: ^/api, roles: IS_AUTHENTICATED_FULLY }
+  access_control: []

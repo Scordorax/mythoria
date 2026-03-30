@@ -143,11 +143,12 @@ class DeckController extends AbstractController
             $deck->setName($data['name']);
         }
 
-        foreach ($deck->getDeckCards() as $deckCard) {
-            $em->remove($deckCard);
-        }
-
+        // On ne touche aux cartes que si elles sont fournies dans la requête
         if (isset($data['cards']) && is_array($data['cards'])) {
+
+            foreach ($deck->getDeckCards() as $deckCard) {
+                $em->remove($deckCard);
+            }
 
             foreach ($data['cards'] as $c) {
 

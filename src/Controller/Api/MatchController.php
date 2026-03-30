@@ -116,15 +116,18 @@ class MatchController extends AbstractController
             return $this->json(['error' => 'Player not found'], 400);
         }
 
-        // Pioche + gain d'énergie au début du tour
-        $card = $this->gameEngine->drawCard($player);
+        // L'énergie est gagnée même si le deck est vide
         $this->gameEngine->addEnergy($player);
-
-        if (!$card) {
-            return $this->json(['error' => 'Deck vide'], 400);
-        }
+        $card = $this->gameEngine->drawCard($player);
 
         $em->flush();
+
+        if (!$card) {
+            return $this->json([
+                'error' => 'Deck vide',
+                'energy' => $player->getEnergy()
+            ], 400);
+        }
 
         return $this->json([
             'card' => $card,
